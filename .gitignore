@@ -1,0 +1,21 @@
+# Build output
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+
+# Local Claude Code files (kept out of the public repository)
+CLAUDE.md
+.claude/

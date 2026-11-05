@@ -1,0 +1,11 @@
+# The "demo" profile replaces the RaceTime API with an in-memory fake (DemoRaceTimeApiClient),
+# so every page of the app can be tried locally without a RaceTime account.
+#
+#   mvn spring-boot:run -Dspring-boot.run.profiles=demo
+#
+# The demo QR codes and bib numbers are listed in README.md and printed to the log at startup.
+
+spring:
+  freemarker:
+    # Pick up template edits without restarting the app.
+    cache: false

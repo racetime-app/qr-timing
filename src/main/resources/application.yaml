@@ -1,0 +1,54 @@
+# Configuration of the QR Timing app.
+#
+# Every value can be overridden with an environment variable, which is how Cloud Run is configured.
+# Spring Boot maps names automatically: racetime.api.base-url -> RACETIME_API_BASE_URL.
+
+spring:
+  application:
+    name: qr-timing
+  messages:
+    # All texts shown to athletes live in messages.properties. Never fall back to the server's locale,
+    # so the pages look the same wherever the container runs.
+    basename: messages
+    fallback-to-system-locale: false
+  freemarker:
+    settings:
+      # Opt in to current FreeMarker behaviour. Among other things this lets templates read Java record
+      # components as properties (info.eventName instead of info.eventName()).
+      incompatible_improvements: 2.3.34
+      # Print numbers as-is: "1234", not "1,234".
+      number_format: computer
+      # Fail loudly on template errors instead of printing a half-rendered page.
+      template_exception_handler: rethrow
+  mvc:
+    # Static files (CSS, images) are served from src/main/resources/static under these paths.
+    static-path-pattern: /static/**
+
+server:
+  # Cloud Run sets PORT. 8080 is the default when running locally.
+  port: ${PORT:8080}
+  error:
+    # Never show stack traces or exception messages to athletes.
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+racetime:
+  api:
+    # Base URL of the RaceTime API. The QR Timing endpoints live under /api/v1/qr.
+    base-url: https://api.racetime.app
+    # How long to wait for the API. Athletes are standing at a checkpoint, so fail fast and let them retry.
+    connect-timeout: 3s
+    read-timeout: 10s
+
+qr-timing:
+  # Where "Open RaceTime" links point to. This address sends visitors to the right app store or the web app.
+  racetime-app-url: https://racetime.app/get-app?utm_source=qr_timing
