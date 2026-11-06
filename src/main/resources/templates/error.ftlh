@@ -16,11 +16,7 @@
 <main class="container container--narrow status">
 
   <div class="status__icon status__icon--error">
-    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#B42318" stroke-width="2.6"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M12 6v7.5"/>
-      <path d="M12 18.2v.1"/>
-    </svg>
+    <img src="/static/img/icon-alert.svg" width="44" height="44" alt="">
   </div>
 
   <div class="status__heading">

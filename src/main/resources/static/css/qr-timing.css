@@ -282,7 +282,7 @@ button:focus-visible {
   margin-inline: auto;
 }
 
-.hero__art svg {
+.hero__illustration {
   max-width: 100%;
   height: auto;
 }
@@ -300,7 +300,7 @@ button:focus-visible {
   line-height: 1.55;
 }
 
-.notice svg {
+.notice__icon {
   flex: none;
   margin-top: 2px;
 }

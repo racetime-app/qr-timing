@@ -15,10 +15,7 @@
 <main class="container container--narrow status">
 
   <div class="status__icon status__icon--success">
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M5 12.5l4.5 4.5L19 7.5"/>
-    </svg>
+    <img src="/static/img/icon-check.svg" width="48" height="48" alt="">
   </div>
 
   <div class="status__heading">

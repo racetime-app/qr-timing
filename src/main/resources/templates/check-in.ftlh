@@ -27,11 +27,7 @@
       <#if checkpoint.finish>
         <span class="eyebrow place-card__eyebrow">${msg("checkin.place.finish")}</span>
         <div class="place-card__finish">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 21V4"/>
-            <path d="M5 4h12l-2 4 2 4H5"/>
-          </svg>
+          <img src="/static/img/icon-finish.svg" width="30" height="30" alt="">
           <span class="place-card__name">${msg("checkpoint.finish")}</span>
         </div>
       <#elseif checkpoint.name?has_content>

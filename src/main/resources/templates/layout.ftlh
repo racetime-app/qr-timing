@@ -73,7 +73,7 @@
   <meta name="robots" content="noindex, nofollow">
   </#if>
   <meta name="theme-color" content="#15803D">
-  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Manrope:wght@600;700;800&display=swap">
@@ -83,7 +83,7 @@
 <div class="page">
   <header class="site-header container container--${width}">
     <div class="brand">
-      <@logo/>
+      <img class="brand__logo" src="/static/img/logo.svg" width="32" height="32" alt="">
       <span class="brand__name">${msg("app.name")}</span>
     </div>
     <#if link?has_content>
@@ -97,17 +97,4 @@
 </div>
 </body>
 </html>
-</#macro>
-
-<#-- The QR Timing logo: a stylised QR code on a green tile. -->
-<#macro logo>
-  <svg class="brand__logo" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="9" fill="#15803D"/>
-    <rect x="6" y="6" width="8" height="8" rx="1.5" fill="none" stroke="#FFFFFF" stroke-width="2"/>
-    <rect x="18" y="6" width="8" height="8" rx="1.5" fill="none" stroke="#FFFFFF" stroke-width="2"/>
-    <rect x="6" y="18" width="8" height="8" rx="1.5" fill="none" stroke="#FFFFFF" stroke-width="2"/>
-    <rect x="18" y="18" width="3.5" height="3.5" fill="#FFFFFF"/>
-    <rect x="23" y="23" width="3.5" height="3.5" fill="#FFFFFF"/>
-    <rect x="23" y="18" width="3.5" height="3.5" fill="#FFFFFF"/>
-  </svg>
 </#macro>

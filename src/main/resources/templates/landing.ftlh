@@ -17,49 +17,13 @@
       <p class="hero__lead">${msg("landing.lead")}</p>
     </div>
     <div class="hero__art">
-      <svg width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="${msg("landing.illustration")}">
-        <rect x="1" y="1" width="238" height="238" rx="28" fill="#FFFFFF" stroke="#D6E0D8" stroke-width="2"/>
-        <rect x="28" y="28" width="62" height="62" rx="8" fill="#15803D"/>
-        <rect x="38" y="38" width="42" height="42" rx="4" fill="#FFFFFF"/>
-        <rect x="48" y="48" width="22" height="22" rx="3" fill="#15803D"/>
-        <rect x="150" y="28" width="62" height="62" rx="8" fill="#15803D"/>
-        <rect x="160" y="38" width="42" height="42" rx="4" fill="#FFFFFF"/>
-        <rect x="170" y="48" width="22" height="22" rx="3" fill="#15803D"/>
-        <rect x="28" y="150" width="62" height="62" rx="8" fill="#15803D"/>
-        <rect x="38" y="160" width="42" height="42" rx="4" fill="#FFFFFF"/>
-        <rect x="48" y="170" width="22" height="22" rx="3" fill="#15803D"/>
-        <g fill="#10201A">
-          <rect x="104" y="28" width="12" height="12" rx="2"/>
-          <rect x="122" y="40" width="12" height="12" rx="2"/>
-          <rect x="104" y="58" width="12" height="12" rx="2"/>
-          <rect x="128" y="72" width="12" height="12" rx="2"/>
-          <rect x="28" y="104" width="12" height="12" rx="2"/>
-          <rect x="52" y="108" width="12" height="12" rx="2"/>
-          <rect x="76" y="104" width="12" height="12" rx="2"/>
-          <rect x="104" y="104" width="12" height="12" rx="2"/>
-          <rect x="128" y="116" width="12" height="12" rx="2"/>
-          <rect x="150" y="104" width="12" height="12" rx="2"/>
-          <rect x="176" y="112" width="12" height="12" rx="2"/>
-          <rect x="200" y="104" width="12" height="12" rx="2"/>
-          <rect x="104" y="150" width="12" height="12" rx="2"/>
-          <rect x="122" y="168" width="12" height="12" rx="2"/>
-          <rect x="170" y="164" width="12" height="12" rx="2"/>
-          <rect x="196" y="152" width="12" height="12" rx="2"/>
-          <rect x="150" y="186" width="12" height="12" rx="2"/>
-          <rect x="104" y="196" width="12" height="12" rx="2"/>
-        </g>
-        <rect x="150" y="150" width="12" height="12" rx="2" fill="#15803D"/>
-        <rect x="188" y="188" width="24" height="24" rx="3" fill="#15803D"/>
-      </svg>
+      <img class="hero__illustration" src="/static/img/qr-illustration.svg" width="240" height="240"
+           alt="${msg("landing.illustration")}">
     </div>
   </section>
 
   <aside class="notice">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0E5A2B" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/>
-      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/>
-    </svg>
+    <img class="notice__icon" src="/static/img/icon-link.svg" width="24" height="24" alt="">
     <p><strong>${msg("landing.notice.lead")}</strong> ${msg("landing.notice.text")}</p>
   </aside>
 
