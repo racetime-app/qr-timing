@@ -633,6 +633,11 @@ button:focus-visible {
   border-bottom: 1px solid var(--color-divider);
 }
 
+/* No line under the last row when no recorded time follows (a repeated check-in with an unknown time). */
+.summary__row:last-child {
+  border-bottom: 0;
+}
+
 .summary__row dt {
   font-size: 15px;
   color: var(--color-text-muted);

@@ -1,5 +1,5 @@
 <#--
-  Check-in form at /c/{eventId}/{checkpointId}/{key}. Design artboards "Check-in" and "Check-in, desktop".
+  Check-in form at /c/{eventId}/{checkpointId}. Design artboards "Check-in" and "Check-in, desktop".
 
   Model (CheckInController):
     info        CheckpointInfo: event name and checkpoint, from the RaceTime API

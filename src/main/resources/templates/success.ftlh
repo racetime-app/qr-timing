@@ -2,13 +2,15 @@
   Confirmation after a check-in. Design artboard "Success".
 
   Model (CheckInController):
-    result        CheckInResult: event, checkpoint and bib from the RaceTime API
-    recordedTime  the recorded time in the event's time zone, such as "14:32:08"
+    result        CheckInResult: event, checkpoint and bib. result.repeated is true when the athlete had
+                  already checked in here, and nothing new was recorded.
+    recordedTime  the recorded time in the event's time zone, such as "14:32:08". Missing for a repeated
+                  check-in whose first time RaceTime doesn't know.
 -->
 <#import "layout.ftlh" as layout>
 <#assign msg = layout.msg>
 <#assign checkpoint = result.checkpoint>
-<#assign kind = checkpoint.finish?then("finish", "checkpoint")>
+<#assign kind = checkpoint.finish?then("finish", "checkpoint") + result.repeated?then("-repeated", "")>
 <@layout.page title=msg("success.title")>
 <main class="container container--narrow status">
 
@@ -37,10 +39,12 @@
       <dt>${msg("success.bib")}</dt>
       <dd class="mono">${result.bib}</dd>
     </div>
+    <#if recordedTime??>
     <div class="summary__time">
       <dt>${msg("success.time")}</dt>
       <dd class="summary__clock">${recordedTime}</dd>
     </div>
+    </#if>
   </dl>
 
   <p class="status__note">${msg("success.note")}</p>

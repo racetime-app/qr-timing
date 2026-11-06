@@ -31,7 +31,12 @@ public record CheckInForm(
         return new CheckInForm(null, null);
     }
 
-    /** The PIN to send to the API: {@code null} when the field was left empty. */
+    /** The bib as a number. Only valid after validation: at most 9 digits always fit in an {@code int}. */
+    int bibNumber() {
+        return Integer.parseInt(bib);
+    }
+
+    /** The PIN that was entered: {@code null} when the field was left empty. */
     String pinOrNull() {
         return pin == null || pin.isEmpty() ? null : pin;
     }

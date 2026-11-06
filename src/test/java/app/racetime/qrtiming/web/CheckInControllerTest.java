@@ -1,14 +1,13 @@
 package app.racetime.qrtiming.web;
 
-import app.racetime.qrtiming.api.CheckInRejectedException;
-import app.racetime.qrtiming.api.RaceTimeApiClient;
 import app.racetime.qrtiming.api.RaceTimeUnavailableException;
-import app.racetime.qrtiming.api.model.CheckInError;
-import app.racetime.qrtiming.api.model.CheckInResult;
-import app.racetime.qrtiming.api.model.Checkpoint;
-import app.racetime.qrtiming.api.model.CheckpointInfo;
-import app.racetime.qrtiming.api.model.CheckpointType;
-import app.racetime.qrtiming.api.model.QrCode;
+import app.racetime.qrtiming.checkin.CheckInError;
+import app.racetime.qrtiming.checkin.CheckInRejectedException;
+import app.racetime.qrtiming.checkin.CheckInResult;
+import app.racetime.qrtiming.checkin.CheckInService;
+import app.racetime.qrtiming.checkin.CheckpointInfo;
+import app.racetime.qrtiming.checkin.CheckpointView;
+import app.racetime.qrtiming.checkin.QrCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -23,8 +22,7 @@ import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,26 +35,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 /**
- * The check-in pages, rendered with the real templates against a mocked RaceTime API.
+ * The check-in pages, rendered with the real templates against a mocked {@link CheckInService}.
  */
 @WebMvcTest(CheckInController.class)
 class CheckInControllerTest {
 
-    private static final String URL = "/c/event-1/cp-1/secret";
-    private static final QrCode QR_CODE = new QrCode("event-1", "cp-1", "secret");
+    private static final String URL = "/c/event-1/cp-1";
+    private static final QrCode QR_CODE = new QrCode("event-1", "cp-1");
 
-    private static final Checkpoint WINDMILL = new Checkpoint("Windmill turn", CheckpointType.CHECKPOINT, 2);
-    private static final CheckpointInfo INFO = new CheckpointInfo("Spring Trail 10K", WINDMILL);
+    private static final CheckpointView WINDMILL = new CheckpointView("Windmill turn", false, 1);
+    private static final CheckpointView FINISH = new CheckpointView("Finish", true, null);
+    private static final Instant RECORDED = Instant.parse("2026-05-17T12:32:08Z");
 
     @Autowired
     private MockMvc mvc;
 
     @MockitoBean
-    private RaceTimeApiClient raceTime;
+    private CheckInService checkIns;
 
     @Test
     void showsFormForNamedCheckpoint() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenReturn(INFO);
+        givenCheckpoint(WINDMILL);
 
         mvc.perform(get(URL))
                 .andExpect(status().isOk())
@@ -65,24 +64,22 @@ class CheckInControllerTest {
                 .andExpect(content().string(allOf(
                         containsString("Spring Trail 10K"),
                         containsString("Windmill turn"),
-                        containsString("action=\"/c/event-1/cp-1/secret\""),
+                        containsString("action=\"/c/event-1/cp-1\""),
                         containsString("name=\"bib\""),
                         containsString("name=\"pin\""))));
     }
 
     @Test
     void showsNumberForCheckpointWithoutName() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenReturn(
-                new CheckpointInfo("Spring Trail 10K", new Checkpoint(null, CheckpointType.CHECKPOINT, 3)));
+        givenCheckpoint(new CheckpointView(null, false, 2));
 
         mvc.perform(get(URL))
-                .andExpect(content().string(allOf(containsString("You are at"), containsString("Checkpoint 3"))));
+                .andExpect(content().string(allOf(containsString("You are at"), containsString("Checkpoint 2"))));
     }
 
     @Test
     void showsFinish() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenReturn(
-                new CheckpointInfo("Spring Trail 10K", new Checkpoint("Finish", CheckpointType.FINISH, null)));
+        givenCheckpoint(FINISH);
 
         mvc.perform(get(URL))
                 .andExpect(content().string(allOf(containsString("You are at the"), containsString("Finish"))));
@@ -90,7 +87,7 @@ class CheckInControllerTest {
 
     @Test
     void prefillsBibAfterTryAgain() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenReturn(INFO);
+        givenCheckpoint(WINDMILL);
 
         mvc.perform(get(URL).param("bib", "214"))
                 .andExpect(content().string(containsString("value=\"214\"")));
@@ -98,7 +95,7 @@ class CheckInControllerTest {
 
     @Test
     void outdatedCodeShowsErrorInsteadOfForm() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenThrow(new CheckInRejectedException(CheckInError.QR_OUTDATED));
+        when(checkIns.findCheckpoint(QR_CODE)).thenThrow(new CheckInRejectedException(CheckInError.QR_OUTDATED));
 
         mvc.perform(get(URL))
                 .andExpect(status().isGone())
@@ -111,8 +108,7 @@ class CheckInControllerTest {
 
     @Test
     void checkInShowsRecordedTime() throws Exception {
-        when(raceTime.checkIn(QR_CODE, "214", "4821")).thenReturn(new CheckInResult(
-                "Spring Trail 10K", WINDMILL, "214", Instant.parse("2026-05-17T12:32:08Z"), "Europe/Warsaw"));
+        when(checkIns.checkIn(QR_CODE, 214, "4821")).thenReturn(result(WINDMILL, RECORDED, false));
 
         mvc.perform(post(URL).param("bib", " 214 ").param("pin", "4821"))
                 .andExpect(status().isOk())
@@ -124,18 +120,34 @@ class CheckInControllerTest {
     }
 
     @Test
-    void finishHasItsOwnConfirmation() throws Exception {
-        Checkpoint finish = new Checkpoint(null, CheckpointType.FINISH, null);
-        when(raceTime.checkIn(QR_CODE, "100", null)).thenReturn(new CheckInResult(
-                "Spring Trail 10K", finish, "100", Instant.parse("2026-05-17T12:32:08Z"), null));
+    void anEmptyPinIsSentAsNone() throws Exception {
+        when(checkIns.checkIn(QR_CODE, 100, null)).thenReturn(result(FINISH, RECORDED, false));
 
         mvc.perform(post(URL).param("bib", "100").param("pin", ""))
-                .andExpect(content().string(allOf(containsString("Finish recorded"), containsString("12:32:08"))));
+                .andExpect(content().string(allOf(containsString("Finish recorded"), containsString("14:32:08"))));
     }
 
     @Test
-    void invalidFormIsShownAgainWithoutCallingTheApi() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenReturn(INFO);
+    void aRepeatedCheckInSaysSo() throws Exception {
+        when(checkIns.checkIn(QR_CODE, 214, "4821")).thenReturn(result(WINDMILL, RECORDED, true));
+
+        mvc.perform(post(URL).param("bib", "214").param("pin", "4821"))
+                .andExpect(content().string(allOf(containsString("You are already checked in"),
+                        containsString("14:32:08"))));
+    }
+
+    @Test
+    void aRepeatedCheckInWithoutAKnownTimeHidesTheTime() throws Exception {
+        when(checkIns.checkIn(QR_CODE, 214, "4821")).thenReturn(result(FINISH, null, true));
+
+        mvc.perform(post(URL).param("bib", "214").param("pin", "4821"))
+                .andExpect(content().string(allOf(containsString("Finish already recorded"),
+                        not(containsString("Time recorded")))));
+    }
+
+    @Test
+    void invalidFormIsShownAgainWithoutCheckingIn() throws Exception {
+        givenCheckpoint(WINDMILL);
 
         mvc.perform(post(URL).param("bib", "").param("pin", "12ab"))
                 .andExpect(status().isUnprocessableContent())
@@ -145,27 +157,26 @@ class CheckInControllerTest {
                         containsString("A PIN has digits only."),
                         containsString("aria-invalid=\"true\""))));
 
-        verify(raceTime, never()).checkIn(any(), anyString(), any());
+        verify(checkIns, never()).checkIn(any(), anyInt(), any());
     }
 
     @ParameterizedTest
     @EnumSource(CheckInError.class)
     void everyRejectionHasAnErrorPage(CheckInError error) throws Exception {
-        when(raceTime.checkIn(eq(QR_CODE), eq("214"), isNull())).thenThrow(new CheckInRejectedException(error));
+        when(checkIns.checkIn(QR_CODE, 214, null)).thenThrow(new CheckInRejectedException(error));
         ErrorScreen screen = ErrorScreen.of(error);
 
         mvc.perform(post(URL).param("bib", "214"))
                 .andExpect(status().is(screen.getStatus().value()))
                 .andExpect(view().name("error"))
                 .andExpect(content().string(screen.isRetryable()
-                        ? containsString("href=\"/c/event-1/cp-1/secret?bib=214\"")
+                        ? containsString("href=\"/c/event-1/cp-1?bib=214\"")
                         : not(containsString("Try again"))));
     }
 
     @Test
     void unavailableApiOffersRetry() throws Exception {
-        when(raceTime.checkIn(eq(QR_CODE), eq("214"), isNull()))
-                .thenThrow(new RaceTimeUnavailableException("down"));
+        when(checkIns.checkIn(QR_CODE, 214, null)).thenThrow(new RaceTimeUnavailableException("down"));
 
         mvc.perform(post(URL).param("bib", "214"))
                 .andExpect(status().isServiceUnavailable())
@@ -176,10 +187,18 @@ class CheckInControllerTest {
 
     @Test
     void securityHeadersAreSet() throws Exception {
-        when(raceTime.findCheckpoint(QR_CODE)).thenReturn(INFO);
+        givenCheckpoint(WINDMILL);
 
         mvc.perform(get(URL))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().string("Content-Security-Policy", containsString("default-src 'self'")));
+    }
+
+    private void givenCheckpoint(CheckpointView checkpoint) {
+        when(checkIns.findCheckpoint(QR_CODE)).thenReturn(new CheckpointInfo("Spring Trail 10K", checkpoint));
+    }
+
+    private static CheckInResult result(CheckpointView checkpoint, Instant recordedAt, boolean repeated) {
+        return new CheckInResult("Spring Trail 10K", checkpoint, "214", recordedAt, "Europe/Warsaw", repeated);
     }
 }

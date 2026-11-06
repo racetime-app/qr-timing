@@ -38,13 +38,20 @@ class QrTimingApplicationTests {
 
     @Test
     void checkInWithDemoAthlete() throws Exception {
-        mvc.perform(get("/c/demo/windmill/demo-key"))
+        mvc.perform(get("/c/demo/windmill"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Windmill turn")));
 
-        mvc.perform(post("/c/demo/windmill/demo-key").param("bib", "214").param("pin", "4821"))
+        mvc.perform(post("/c/demo/windmill").param("bib", "214").param("pin", "4821"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("You are checked in")));
+
+        // Checking in again shows the confirmation again, and skipping ahead is refused.
+        mvc.perform(post("/c/demo/windmill").param("bib", "214").param("pin", "4821"))
+                .andExpect(content().string(containsString("You are already checked in")));
+        mvc.perform(post("/c/demo/finish").param("bib", "214").param("pin", "4821"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(content().string(containsString("A checkpoint was missed")));
     }
 
     @Test

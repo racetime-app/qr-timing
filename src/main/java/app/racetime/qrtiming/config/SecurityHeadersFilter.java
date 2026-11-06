@@ -16,8 +16,8 @@ import java.io.IOException;
  * <p>The app has no JavaScript, no accounts and no cookies, so a few headers cover what matters:
  * <ul>
  *   <li>{@code Content-Security-Policy}: only this app's own files, plus Google Fonts, may load.</li>
- *   <li>{@code Referrer-Policy: no-referrer}: check-in URLs hold the secret QR key, so the browser must not pass
- *       them on to other sites (such as the fonts server, or racetime.app when a link is followed).</li>
+ *   <li>{@code Referrer-Policy: no-referrer}: the browser does not tell other sites (the fonts server, or
+ *       racetime.app when a link is followed) which event and checkpoint the athlete was at.</li>
  *   <li>{@code Cache-Control: no-store} on check-in pages: they show personal results, and are never cached.</li>
  * </ul>
  */

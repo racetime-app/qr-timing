@@ -3,21 +3,31 @@ package app.racetime.qrtiming.api.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
- * A checkpoint as the RaceTime API describes it.
+ * A checkpoint of an event, as {@code GET /api/v1/events/{eventId}/checkpoints} returns it. The API lists the
+ * checkpoints in course order: the start, the checkpoints along the way, the finish.
  *
- * <p>{@code @JsonIgnoreProperties(ignoreUnknown = true)} keeps this app working when the API adds new fields.
- * It is a good habit for any API client.
- *
- * @param name   the name the organiser gave the checkpoint, such as "Windmill turn"; may be {@code null} or empty
- * @param type   whether this is a checkpoint or the finish
- * @param number position of the checkpoint along the course, starting at 1; may be {@code null}.
- *               The pages show "Checkpoint 3" when the checkpoint has no name.
+ * @param id    the checkpoint ID, which is also the last part of the QR code's address
+ * @param type  {@code "start"}, {@code "checkpoint"} or {@code "finish"}
+ * @param name  the name the organiser gave it, such as "Windmill turn"; may be {@code null} or empty
+ * @param isLap {@code true} on the finish of a lap race, where the finish line is crossed once per lap
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record Checkpoint(String name, CheckpointType type, Integer number) {
+public record Checkpoint(String id, String type, String name, Boolean isLap) {
 
-    /** {@code true} for the finish line. Templates read this as {@code checkpoint.finish}. */
+    public static final String TYPE_START = "start";
+    public static final String TYPE_CHECKPOINT = "checkpoint";
+    public static final String TYPE_FINISH = "finish";
+
+    public boolean isStart() {
+        return TYPE_START.equals(type);
+    }
+
     public boolean isFinish() {
-        return type == CheckpointType.FINISH;
+        return TYPE_FINISH.equals(type);
+    }
+
+    /** A checkpoint along the course, between the start and the finish. */
+    public boolean isIntermediate() {
+        return TYPE_CHECKPOINT.equals(type);
     }
 }

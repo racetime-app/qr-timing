@@ -1,9 +1,6 @@
 package app.racetime.qrtiming.web;
 
-import app.racetime.qrtiming.api.CheckInRejectedException;
-import app.racetime.qrtiming.api.RaceTimeApiException;
-import app.racetime.qrtiming.api.RaceTimeUnavailableException;
-import app.racetime.qrtiming.api.model.CheckInError;
+import app.racetime.qrtiming.checkin.CheckInError;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -23,6 +20,7 @@ public enum ErrorScreen {
     PIN_REQUIRED("pin-required", HttpStatus.UNPROCESSABLE_CONTENT, true, false),
     PIN_MISMATCH("pin-mismatch", HttpStatus.UNPROCESSABLE_CONTENT, true, false),
     BIB_NOT_FOUND("bib-not-found", HttpStatus.UNPROCESSABLE_CONTENT, true, false),
+    BIB_AMBIGUOUS("bib-ambiguous", HttpStatus.UNPROCESSABLE_CONTENT, true, false),
     QR_OUTDATED("qr-outdated", HttpStatus.GONE, false, true),
     CHECKPOINT_SKIPPED("checkpoint-skipped", HttpStatus.UNPROCESSABLE_CONTENT, false, true),
     NOT_STARTED("not-started", HttpStatus.UNPROCESSABLE_CONTENT, false, true),
@@ -49,20 +47,13 @@ public enum ErrorScreen {
         this.adviceShown = adviceShown;
     }
 
-    /** The page to show for a failed API call. */
-    public static ErrorScreen of(RaceTimeApiException exception) {
-        // RaceTimeApiException is sealed, so the compiler checks that both kinds are handled.
-        return switch (exception) {
-            case CheckInRejectedException rejected -> of(rejected.error());
-            case RaceTimeUnavailableException unavailable -> UNAVAILABLE;
-        };
-    }
-
-    /** The page to show when the API refused a request. */
+    /** The page to show when a check-in can't go ahead. */
     public static ErrorScreen of(CheckInError error) {
+        // A switch over an enum without "default" makes the compiler check that every error has a page.
         return switch (error) {
             case QR_OUTDATED -> QR_OUTDATED;
             case BIB_NOT_FOUND -> BIB_NOT_FOUND;
+            case BIB_AMBIGUOUS -> BIB_AMBIGUOUS;
             case PIN_REQUIRED -> PIN_REQUIRED;
             case PIN_MISMATCH -> PIN_MISMATCH;
             case CHECKPOINT_SKIPPED -> CHECKPOINT_SKIPPED;

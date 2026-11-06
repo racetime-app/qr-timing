@@ -1,10 +1,8 @@
 package app.racetime.qrtiming.api;
 
-import app.racetime.qrtiming.api.model.CheckInError;
-import app.racetime.qrtiming.api.model.CheckInResult;
-import app.racetime.qrtiming.api.model.CheckpointInfo;
-import app.racetime.qrtiming.api.model.CheckpointType;
-import app.racetime.qrtiming.api.model.QrCode;
+import app.racetime.qrtiming.api.model.Checkpoint;
+import app.racetime.qrtiming.api.model.Event;
+import app.racetime.qrtiming.api.model.Participant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -15,10 +13,13 @@ import org.springframework.web.client.RestClient;
 
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
@@ -33,159 +34,185 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class HttpRaceTimeApiClientTest {
 
     private static final String API = "https://api.example.test";
-    private static final QrCode QR_CODE = new QrCode("event-1", "cp-1", "secret");
+    private static final String TOKEN = "test-token";
 
     private MockRestServiceServer server;
     private HttpRaceTimeApiClient client;
 
     @BeforeEach
     void setUp() {
-        RestClient.Builder builder = RestClient.builder().baseUrl(API);
+        RestClient.Builder builder = RestClient.builder().baseUrl(API).defaultHeader("X-RaceTime-Token", TOKEN);
         server = MockRestServiceServer.bindTo(builder).build();
         client = new HttpRaceTimeApiClient(builder.build());
     }
 
     @Test
-    void findCheckpointReadsEventAndCheckpoint() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret"))
+    void findEventReadsTheEventAndSendsTheToken() {
+        server.expect(requestTo(API + "/api/v1/events/event-1"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-RaceTime-Token", TOKEN))
                 .andRespond(withSuccess("""
-                        {"eventName": "Spring Trail 10K",
-                         "checkpoint": {"name": "Windmill turn", "type": "CHECKPOINT", "number": 3},
-                         "someFutureField": true}
+                        {"id": "event-1", "title": "Spring Trail 10K", "timeZone": "Europe/Warsaw",
+                         "timingMethod": "INTEGRATION", "eventType": "MASS_START"}
                         """, MediaType.APPLICATION_JSON));
 
-        CheckpointInfo info = client.findCheckpoint(QR_CODE);
+        Optional<Event> event = client.findEvent("event-1");
 
-        assertThat(info.eventName()).isEqualTo("Spring Trail 10K");
-        assertThat(info.checkpoint().name()).isEqualTo("Windmill turn");
-        assertThat(info.checkpoint().type()).isEqualTo(CheckpointType.CHECKPOINT);
-        assertThat(info.checkpoint().number()).isEqualTo(3);
+        assertThat(event).hasValueSatisfying(e -> {
+            assertThat(e.title()).isEqualTo("Spring Trail 10K");
+            assertThat(e.timedByIntegration()).isTrue();
+        });
         server.verify();
     }
 
     @Test
-    void pathSegmentsAreEncoded() {
-        server.expect(requestTo(API + "/api/v1/qr/event%201/cp-1/a%2Fb"))
-                .andRespond(withSuccess("""
-                        {"eventName": "E", "checkpoint": {"type": "FINISH"}}
-                        """, MediaType.APPLICATION_JSON));
+    void anUnknownEventIsEmpty() {
+        server.expect(requestTo(API + "/api/v1/events/nope"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"id\": \"The event with ID nope not found.\"}"));
 
-        CheckpointInfo info = client.findCheckpoint(new QrCode("event 1", "cp-1", "a/b"));
+        assertThat(client.findEvent("nope")).isEmpty();
+    }
 
-        assertThat(info.checkpoint().isFinish()).isTrue();
+    @Test
+    void pathVariablesAreEncoded() {
+        server.expect(requestTo(API + "/api/v1/events/a%2Fb"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(client.findEvent("a/b")).isEmpty();
         server.verify();
     }
 
     @Test
-    void checkInSendsBibAndPin() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret/checkIn"))
+    void getCheckpointsKeepsCourseOrder() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkpoints"))
+                .andRespond(withSuccess("""
+                        [{"id": "s", "type": "start", "name": "Start"},
+                         {"id": "w", "type": "checkpoint", "name": "Windmill turn", "km": 4.5},
+                         {"id": "f", "type": "finish", "isLap": false}]
+                        """, MediaType.APPLICATION_JSON));
+
+        List<Checkpoint> course = client.getCheckpoints("event-1");
+
+        assertThat(course).extracting(Checkpoint::id).containsExactly("s", "w", "f");
+        assertThat(course.get(1).isIntermediate()).isTrue();
+        assertThat(course.get(2).isFinish()).isTrue();
+    }
+
+    @Test
+    void findParticipantsSearchesByBib() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/participants?bib=214"))
+                .andRespond(withSuccess("""
+                        [{"id": "p1", "name": "Ann Runner", "bib": 214, "pin": "4821", "categoryId": "c1"},
+                         {"id": "p2", "name": "Ann Other", "bib": 214, "pin": null}]
+                        """, MediaType.APPLICATION_JSON));
+
+        List<Participant> found = client.findParticipantsByBib("event-1", 214);
+
+        assertThat(found).extracting(Participant::id).containsExactly("p1", "p2");
+        assertThat(found.get(0).hasPin()).isTrue();
+        assertThat(found.get(1).hasPin()).isFalse();
+    }
+
+    @Test
+    void checkInSendsCheckpointParticipantAndTime() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkIn"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().json("""
-                        {"bib": "214", "pin": "4821"}
+                        {"checkpoint": "cp-1", "participant": "p1", "timestamp": "2026-05-17T12:32:08.412Z"}
                         """))
-                .andRespond(withSuccess("""
-                        {"eventName": "Spring Trail 10K",
-                         "checkpoint": {"name": "Windmill turn", "type": "CHECKPOINT", "number": 3},
-                         "bib": "214",
-                         "recordedAt": "2026-05-17T12:32:08.412Z",
-                         "timeZone": "Europe/Warsaw"}
-                        """, MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess());
 
-        CheckInResult result = client.checkIn(QR_CODE, "214", "4821");
+        client.checkIn("event-1", "cp-1", "p1", Instant.parse("2026-05-17T12:32:08.412345Z"));
 
-        assertThat(result.bib()).isEqualTo("214");
-        assertThat(result.recordedAt()).isEqualTo(Instant.parse("2026-05-17T12:32:08.412Z"));
-        assertThat(result.localRecordedAt().toLocalTime()).hasToString("14:32:08.412");
         server.verify();
     }
 
     @Test
-    void checkInWithoutPinSendsNull() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret/checkIn"))
-                .andExpect(content().json("""
-                        {"bib": "100", "pin": null}
-                        """))
-                .andRespond(withSuccess("""
-                        {"eventName": "E", "checkpoint": {"type": "FINISH"}, "bib": "100",
-                         "recordedAt": "2026-05-17T12:32:08Z"}
-                        """, MediaType.APPLICATION_JSON));
+    void notStartedIsRefused() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkIn"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"startTime\": \"Participant not started.\"}"));
 
-        CheckInResult result = client.checkIn(QR_CODE, "100", null);
-
-        // No time zone from the API: the time is shown in UTC.
-        assertThat(result.localRecordedAt().toLocalTime()).hasToString("12:32:08");
+        assertRefused(CheckInRefusedException.Reason.NOT_STARTED, null);
     }
 
     @Test
-    void knownErrorCodeBecomesRejection() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret/checkIn"))
-                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("""
-                                {"code": "pin_mismatch", "message": "PIN does not match"}
-                                """));
+    void skippedCheckpointIsRefused() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkIn"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\": \"checkpoint_skipped\", \"error\": \"...\"}"));
 
-        assertThatThrownBy(() -> client.checkIn(QR_CODE, "214", "0000"))
-                .isInstanceOfSatisfying(CheckInRejectedException.class,
-                        e -> assertThat(e.error()).isEqualTo(CheckInError.PIN_MISMATCH));
+        assertRefused(CheckInRefusedException.Reason.CHECKPOINT_SKIPPED, null);
     }
 
     @Test
-    void outdatedQrCodeOnLookup() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret"))
-                .andRespond(withStatus(HttpStatus.NOT_FOUND)
-                        .contentType(MediaType.APPLICATION_JSON)
+    void repeatedCheckInCarriesTheEarlierTime() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkIn"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
                         .body("""
-                                {"code": "qr_outdated"}
+                                {"code": "already_checked_in", "error": "...",
+                                 "timestamp": "2026-05-17T12:10:00.250Z"}
                                 """));
 
-        assertThatThrownBy(() -> client.findCheckpoint(QR_CODE))
-                .isInstanceOfSatisfying(CheckInRejectedException.class,
-                        e -> assertThat(e.error()).isEqualTo(CheckInError.QR_OUTDATED));
+        assertRefused(CheckInRefusedException.Reason.ALREADY_CHECKED_IN, Instant.parse("2026-05-17T12:10:00.250Z"));
     }
 
     @Test
-    void unknownErrorCodeMeansUnavailable() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret/checkIn"))
-                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("""
-                                {"code": "something_new"}
-                                """));
+    void unknownConflictCodeMeansUnavailable() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkIn"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\": \"something_new\"}"));
 
-        assertThatThrownBy(() -> client.checkIn(QR_CODE, "214", null))
+        assertThatThrownBy(() -> client.checkIn("event-1", "cp-1", "p1", Instant.now()))
                 .isInstanceOf(RaceTimeUnavailableException.class);
     }
 
     @Test
-    void errorWithoutJsonBodyMeansUnavailable() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret"))
-                .andRespond(withStatus(HttpStatus.NOT_FOUND)
-                        .contentType(MediaType.TEXT_HTML)
-                        .body("<html>Not Found</html>"));
+    void otherBadRequestsMeanUnavailable() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkIn"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"checkpoint\": \"Checkpoint not found.\"}"));
 
-        assertThatThrownBy(() -> client.findCheckpoint(QR_CODE))
+        assertThatThrownBy(() -> client.checkIn("event-1", "cp-1", "p1", Instant.now()))
                 .isInstanceOf(RaceTimeUnavailableException.class);
+    }
+
+    @Test
+    void aRejectedTokenIsReportedPlainly() {
+        server.expect(requestTo(API + "/api/v1/events/event-1/checkpoints"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.getCheckpoints("event-1"))
+                .isInstanceOf(RaceTimeUnavailableException.class)
+                .hasMessageContaining("token");
     }
 
     @Test
     void serverErrorMeansUnavailable() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret"))
+        server.expect(requestTo(API + "/api/v1/events/event-1"))
                 .andRespond(withServerError());
 
-        assertThatThrownBy(() -> client.findCheckpoint(QR_CODE))
+        assertThatThrownBy(() -> client.findEvent("event-1"))
                 .isInstanceOf(RaceTimeUnavailableException.class)
                 .hasMessageContaining("500");
     }
 
     @Test
     void timeoutMeansUnavailable() {
-        server.expect(requestTo(API + "/api/v1/qr/event-1/cp-1/secret/checkIn"))
+        server.expect(requestTo(API + "/api/v1/events/event-1/participants?bib=1"))
                 .andRespond(withException(new SocketTimeoutException("Read timed out")));
 
-        assertThatThrownBy(() -> client.checkIn(QR_CODE, "214", null))
+        assertThatThrownBy(() -> client.findParticipantsByBib("event-1", 1))
                 .isInstanceOf(RaceTimeUnavailableException.class)
                 .hasRootCauseInstanceOf(SocketTimeoutException.class);
+    }
+
+    private void assertRefused(CheckInRefusedException.Reason reason, Instant earlier) {
+        assertThatThrownBy(() -> client.checkIn("event-1", "cp-1", "p1", Instant.now()))
+                .isInstanceOfSatisfying(CheckInRefusedException.class, e -> {
+                    assertThat(e.reason()).isEqualTo(reason);
+                    assertThat(e.earlierCheckIn()).isEqualTo(earlier);
+                });
     }
 }

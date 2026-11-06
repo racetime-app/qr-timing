@@ -1,100 +1,56 @@
 package app.racetime.qrtiming.api;
 
-import app.racetime.qrtiming.api.model.CheckInError;
-import app.racetime.qrtiming.api.model.CheckInResult;
-import app.racetime.qrtiming.api.model.QrCode;
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** The demo API follows the same rules as the real one, so the pages can be tried in every state. */
+/** The demo API follows the course-order rules of the real one, so every page can be tried. */
 class DemoRaceTimeApiClientTest {
 
-    private static final QrCode FINISH = new QrCode("demo", "finish", "demo-key");
+    private static final Instant T1 = Instant.parse("2026-05-17T12:00:00Z");
+    private static final Instant T2 = Instant.parse("2026-05-17T12:30:00Z");
 
-    private final MutableClock clock = new MutableClock(Instant.parse("2026-05-17T12:00:00Z"));
-    private final DemoRaceTimeApiClient demo = new DemoRaceTimeApiClient(clock);
+    private final DemoRaceTimeApiClient demo = new DemoRaceTimeApiClient();
 
     @Test
-    void athleteWithPinChecksIn() {
-        CheckInResult result = demo.checkIn(FINISH, "214", "4821");
-
-        assertThat(result.bib()).isEqualTo("214");
-        assertThat(result.checkpoint().isFinish()).isTrue();
+    void checkpointsInCourseOrder() {
+        demo.checkIn("demo", "windmill", "p-214", T1);
+        demo.checkIn("demo", "cp2", "p-214", T2);
+        demo.checkIn("demo", "finish", "p-214", T2);
     }
 
     @Test
-    void athleteWithoutPinChecksInWhateverIsTyped() {
-        assertThat(demo.checkIn(FINISH, "100", null).bib()).isEqualTo("100");
-        assertThat(demo.checkIn(FINISH, "100", "9999").bib()).isEqualTo("100");
+    void aMissedCheckpoint() {
+        assertRefused(() -> demo.checkIn("demo", "cp2", "p-100", T1), CheckInRefusedException.Reason.CHECKPOINT_SKIPPED);
     }
 
     @Test
-    void pinRules() {
-        assertRejected(() -> demo.checkIn(FINISH, "214", null), CheckInError.PIN_REQUIRED);
-        assertRejected(() -> demo.checkIn(FINISH, "214", "0000"), CheckInError.PIN_MISMATCH);
+    void aRepeatedCheckInReturnsTheFirstTime() {
+        demo.checkIn("demo", "windmill", "p-100", T1);
+
+        assertThatThrownBy(() -> demo.checkIn("demo", "windmill", "p-100", T2))
+                .isInstanceOfSatisfying(CheckInRefusedException.class,
+                        e -> assertThat(e.earlierCheckIn()).isEqualTo(T1));
     }
 
     @Test
-    void repeatedCheckInKeepsTheFirstTime() {
-        Instant first = demo.checkIn(FINISH, "100", null).recordedAt();
-        clock.advance(Duration.ofMinutes(5));
-
-        assertThat(demo.checkIn(FINISH, "100", null).recordedAt()).isEqualTo(first);
+    void notStarted() {
+        assertRefused(() -> demo.checkIn("demo", "windmill", "p-400", T1), CheckInRefusedException.Reason.NOT_STARTED);
     }
 
     @Test
-    void failingBibs() {
-        assertRejected(() -> demo.checkIn(FINISH, "300", null), CheckInError.CHECKPOINT_SKIPPED);
-        assertRejected(() -> demo.checkIn(FINISH, "400", null), CheckInError.NOT_STARTED);
-        assertRejected(() -> demo.checkIn(FINISH, "500", null), CheckInError.TOO_MANY_ATTEMPTS);
-        assertRejected(() -> demo.checkIn(FINISH, "999", null), CheckInError.BIB_NOT_FOUND);
-        assertThatThrownBy(() -> demo.checkIn(FINISH, "503", null)).isInstanceOf(RaceTimeUnavailableException.class);
+    void searchByBib() {
+        assertThat(demo.findParticipantsByBib("demo", 777)).hasSize(2);
+        assertThat(demo.findParticipantsByBib("demo", 999)).isEmpty();
+        assertThatThrownBy(() -> demo.findParticipantsByBib("demo", 503))
+                .isInstanceOf(RaceTimeUnavailableException.class);
     }
 
-    @Test
-    void unknownCodeIsOutdated() {
-        assertRejected(() -> demo.findCheckpoint(new QrCode("demo", "finish", "old-key")), CheckInError.QR_OUTDATED);
-        assertRejected(() -> demo.findCheckpoint(new QrCode("demo", "nowhere", "demo-key")), CheckInError.QR_OUTDATED);
-    }
-
-    private static void assertRejected(Runnable call, CheckInError expected) {
+    private static void assertRefused(Runnable call, CheckInRefusedException.Reason reason) {
         assertThatThrownBy(call::run)
-                .isInstanceOfSatisfying(CheckInRejectedException.class, e -> assertThat(e.error()).isEqualTo(expected));
-    }
-
-    /** A clock the test can move forward. */
-    private static final class MutableClock extends Clock {
-
-        private Instant now;
-
-        MutableClock(Instant now) {
-            this.now = now;
-        }
-
-        void advance(Duration duration) {
-            now = now.plus(duration);
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-
-        @Override
-        public ZoneOffset getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(java.time.ZoneId zone) {
-            return this;
-        }
+                .isInstanceOfSatisfying(CheckInRefusedException.class, e -> assertThat(e.reason()).isEqualTo(reason));
     }
 }

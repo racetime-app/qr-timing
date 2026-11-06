@@ -5,36 +5,47 @@ organiser puts up a QR code. Athletes scan it with their phone, enter their bib 
 given one) and the check-in is recorded in RaceTime.
 
 This repository is also a **worked example of a RaceTime API integration**. It is a small, plain Spring Boot app,
-written to be read: start with [`HttpRaceTimeApiClient`](src/main/java/app/racetime/qrtiming/api/HttpRaceTimeApiClient.java).
+written to be read: start with [`CheckInService`](src/main/java/app/racetime/qrtiming/checkin/CheckInService.java)
+for the flow and [`HttpRaceTimeApiClient`](src/main/java/app/racetime/qrtiming/api/HttpRaceTimeApiClient.java) for
+the API calls.
 
 ## How it works
 
 ```
- Athlete's phone                 QR Timing (this app)                    RaceTime API
- ───────────────                 ────────────────────                    ────────────
- scans QR code ──────────▶ GET  /c/{eventId}/{checkpointId}/{key}
-                                   └─ GET  /api/v1/qr/{eventId}/{checkpointId}/{key} ──▶ event + checkpoint
-               ◀────────── check-in form
+ Athlete's phone           QR Timing (this app)                       RaceTime API
+ ───────────────           ────────────────────                       ────────────
+ scans QR code ────▶ GET  /c/{eventId}/{checkpointId}
+                             ├─ GET /api/v1/events/{eventId} ──────────────────▶ event, timing method
+                             └─ GET /api/v1/events/{eventId}/checkpoints ──────▶ course
+               ◀──── check-in form
 
- sends bib + PIN ────────▶ POST /c/{eventId}/{checkpointId}/{key}
-                                   └─ POST /api/v1/qr/{…}/checkIn {bib, pin} ─────────▶ records the time
-               ◀────────── confirmation, or what went wrong
+ bib + PIN ────────▶ POST /c/{eventId}/{checkpointId}
+                             ├─ (event and checkpoints, as above)
+                             ├─ GET  /api/v1/events/{eventId}/participants?bib= ▶ athletes and their PINs
+                             └─ POST /api/v1/events/{eventId}/checkIn ─────────▶ records the time
+               ◀──── confirmation, or what went wrong
 ```
 
-* The QR code holds a link to this app. Its last part, the `key`, is a secret that proves the athlete scanned the
-  real code. It is all the API needs to accept a check-in, so **the app holds no RaceTime credentials**.
-* The API records the time itself, when the check-in arrives.
-* PINs are optional. If an athlete has one, it must be entered. If not, the PIN field is simply left empty.
-* The pages are server-rendered with FreeMarker and use no JavaScript.
+* QR Timing uses only the **public RaceTime API**, the same endpoints any integration can call. It authenticates
+  with a RaceTime API token that belongs to an admin.
+* The QR code holds the event ID and the checkpoint ID, and nothing secret.
+* Organisers hand an event's timing to an integration by setting its timing method to `INTEGRATION` (checkpoints
+  and finish) or `INTEGRATION_CHECKPOINTS` (checkpoints only, timekeepers at the finish). QR Timing refuses
+  check-ins for events left to timekeepers (`MANUAL`).
+* Bib numbers may repeat within an event, and PINs are optional. QR Timing picks the athlete from the bib number
+  and the PIN, and limits PIN guessing.
+* The time recorded is the moment the athlete's form arrives. RaceTime checks the course order: a missed checkpoint
+  is refused, and a repeated check-in shows the first time again.
+* The pages are rendered on the server with FreeMarker and use no JavaScript.
 
-The API calls are described in [docs/api-contract.md](docs/api-contract.md).
+Each API call and how its answers are handled is described in [docs/racetime-api.md](docs/racetime-api.md).
 
 ## Pages
 
 | Page | Address | Template |
 |---|---|---|
 | Landing: what QR Timing is | `/` | [`landing.ftlh`](src/main/resources/templates/landing.ftlh) |
-| Check-in form | `/c/{eventId}/{checkpointId}/{key}` | [`check-in.ftlh`](src/main/resources/templates/check-in.ftlh) |
+| Check-in form | `/c/{eventId}/{checkpointId}` | [`check-in.ftlh`](src/main/resources/templates/check-in.ftlh) |
 | Confirmation | after sending the form | [`success.ftlh`](src/main/resources/templates/success.ftlh) |
 | Errors: wrong PIN, unknown bib, out-of-date code, missed checkpoint, ... | | [`error.ftlh`](src/main/resources/templates/error.ftlh) |
 
@@ -55,24 +66,30 @@ Then open one of these:
 
 | QR code | Link |
 |---|---|
-| Named checkpoint | http://localhost:8080/c/demo/windmill/demo-key |
-| Checkpoint without a name | http://localhost:8080/c/demo/cp3/demo-key |
-| Finish | http://localhost:8080/c/demo/finish/demo-key |
-| Out-of-date code | http://localhost:8080/c/demo/finish/old-key |
+| Checkpoint 1, "Windmill turn" | http://localhost:8080/c/demo/windmill |
+| Checkpoint 2, without a name | http://localhost:8080/c/demo/cp2 |
+| Finish | http://localhost:8080/c/demo/finish |
+| Out-of-date code (event timed manually) | http://localhost:8080/c/manual/finish |
 
 And try these bib numbers:
 
-| Bib | Result |
+| Bib | Athlete |
 |---|---|
-| `214`, PIN `4821` | Checked in. Leave out the PIN or enter another one to see the PIN errors. |
-| `100`, no PIN | Checked in, whatever you type as PIN. |
-| `300` | A checkpoint was missed. |
-| `400` | Start not recorded. |
-| `500` | Too many attempts. |
+| `214`, PIN `4821` | Has started. Leave out the PIN or enter another one to see the PIN errors; five wrong PINs block the bib for 15 minutes. |
+| `100`, no PIN | Has started. Any PIN, or none, is accepted. |
+| `777` | Two athletes share this bib, with PINs `1111` and `2222`. Without a PIN they can't be told apart. |
+| `400` | Has not started. |
 | `503` | RaceTime is not responding. |
 | anything else | Bib number not found. |
 
-Without the `demo` profile the app calls the real API at `https://api.racetime.app`.
+The demo follows the course order like RaceTime does. Check in at the finish before `windmill` to see "A checkpoint
+was missed". Check in twice at the same checkpoint to see the confirmation again.
+
+Without the `demo` profile the app calls the real API at `https://api.racetime.app` and needs an API token:
+
+```bash
+RACETIME_API_TOKEN=<token> mvn spring-boot:run
+```
 
 ## Tests
 
@@ -81,7 +98,9 @@ mvn test
 ```
 
 * `HttpRaceTimeApiClientTest`: the HTTP requests, and how each kind of API response is handled.
-* `CheckInControllerTest`: every page, rendered with the real templates against a mocked API.
+* `ParticipantMatcherTest`: which athlete a bib number and PIN point to.
+* `CheckInServiceTest`: the check-in flow against a mocked API.
+* `CheckInControllerTest`: every page, rendered with the real templates.
 * `QrTimingApplicationTests`: the whole app with the demo API.
 
 ## Configuration
@@ -92,6 +111,7 @@ environment variable:
 | Setting | Environment variable | Default |
 |---|---|---|
 | `racetime.api.base-url` | `RACETIME_API_BASE_URL` | `https://api.racetime.app` |
+| `racetime.api.token` | `RACETIME_API_TOKEN` | none: required unless the `demo` profile is active |
 | `racetime.api.connect-timeout` | `RACETIME_API_CONNECT_TIMEOUT` | `3s` |
 | `racetime.api.read-timeout` | `RACETIME_API_READ_TIMEOUT` | `10s` |
 | `qr-timing.racetime-app-url` | `QR_TIMING_RACETIME_APP_URL` | `https://racetime.app/get-app?utm_source=qr_timing` |
@@ -99,7 +119,14 @@ environment variable:
 
 ## Deploy to Google Cloud Run
 
-The [`Dockerfile`](Dockerfile) builds the app and runs it on a JRE image. Cloud Run can build it for you:
+The [`Dockerfile`](Dockerfile) builds the app and runs it on a JRE image. Store the API token in Secret Manager
+once:
+
+```bash
+printf '%s' "<token>" | gcloud secrets create qr-timing-api-token --project PROJECT_ID --data-file=-
+```
+
+Then let Cloud Run build and deploy the app, handing it the token as `RACETIME_API_TOKEN`:
 
 ```bash
 gcloud run deploy qr-timing \
@@ -107,8 +134,10 @@ gcloud run deploy qr-timing \
   --project PROJECT_ID \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars RACETIME_API_BASE_URL=https://api.racetime.app
+  --set-secrets RACETIME_API_TOKEN=qr-timing-api-token:latest
 ```
+
+The service account Cloud Run runs as needs the `Secret Manager Secret Accessor` role on the secret.
 
 `/actuator/health` answers `{"status":"UP"}` and can serve as the startup and liveness probe.
 
@@ -127,12 +156,13 @@ docker run --rm -p 8080:8080 -e SPRING_PROFILES_ACTIVE=demo qr-timing
 ```
 src/main/java/app/racetime/qrtiming/
   api/       the RaceTime API: client interface, HTTP client, demo client, response records
+  checkin/   the check-in flow: finding the athlete, PIN rules, attempt limit
   config/    settings, the RestClient set-up, security headers
   web/       controllers, the check-in form, error page variants
 src/main/resources/
   templates/ FreeMarker pages (layout.ftlh holds the shared shell)
   static/    CSS and images
-docs/        the API contract
+docs/        the RaceTime API calls the app makes
 ```
 
 ## License

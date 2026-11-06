@@ -1,51 +1,57 @@
 package app.racetime.qrtiming.api;
 
-import app.racetime.qrtiming.api.model.CheckInResult;
-import app.racetime.qrtiming.api.model.CheckpointInfo;
-import app.racetime.qrtiming.api.model.QrCode;
+import app.racetime.qrtiming.api.model.Checkpoint;
+import app.racetime.qrtiming.api.model.Event;
+import app.racetime.qrtiming.api.model.Participant;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 /**
- * Everything QR Timing needs from the RaceTime API: two calls.
+ * The four RaceTime API calls QR Timing makes. They are the public RaceTime API, which any integration can use;
+ * nothing here is specific to QR Timing.
  *
- * <p>Both are authorised by the {@link QrCode#key() key} inside the QR code, so the app holds no RaceTime
- * credentials of its own. The full contract, with request and response examples, is in
- * {@code docs/api-contract.md}.
+ * <p>Every call is authenticated with an API token (header {@code X-RaceTime-Token}). The token must belong to an
+ * admin: it acts on whichever event a QR code points to, and it must be allowed to read the athletes' PINs.
  *
  * <p>Two implementations exist:
  * <ul>
  *   <li>{@link HttpRaceTimeApiClient} calls the real API.</li>
  *   <li>{@link DemoRaceTimeApiClient} answers from memory, for trying the app locally (profile {@code demo}).</li>
  * </ul>
+ * Each method throws {@link RaceTimeUnavailableException} when the API can't be reached or answers unexpectedly.
  */
 public interface RaceTimeApiClient {
 
     /**
-     * Looks up the event and checkpoint a QR code belongs to.
+     * {@code GET /api/v1/events/{eventId}}
      *
-     * <p>{@code GET /api/v1/qr/{eventId}/{checkpointId}/{key}}
-     *
-     * @param qrCode the scanned code
-     * @return the event name and checkpoint, to show above the check-in form
-     * @throws CheckInRejectedException    with {@code QR_OUTDATED} if the code is no longer valid
-     * @throws RaceTimeUnavailableException if the API could not be reached or answered unexpectedly
+     * @return the event, or empty if there is no event with that ID
      */
-    CheckpointInfo findCheckpoint(QrCode qrCode);
+    Optional<Event> findEvent(String eventId);
 
     /**
-     * Checks an athlete in at the checkpoint of a QR code.
+     * {@code GET /api/v1/events/{eventId}/checkpoints}
      *
-     * <p>{@code POST /api/v1/qr/{eventId}/{checkpointId}/{key}/checkIn}
-     *
-     * <p>The API records the time when it receives the request. Repeating the call for the same athlete and
-     * checkpoint is safe: the first recorded time is returned again.
-     *
-     * @param qrCode the scanned code
-     * @param bib    the athlete's bib number (digits)
-     * @param pin    the athlete's PIN, or {@code null} if none was entered. The API ignores it for athletes
-     *               who have no PIN.
-     * @return the recorded check-in
-     * @throws CheckInRejectedException    if the API refused the check-in, for example because of a wrong PIN
-     * @throws RaceTimeUnavailableException if the API could not be reached or answered unexpectedly
+     * @return the event's checkpoints in course order: start, checkpoints, finish
      */
-    CheckInResult checkIn(QrCode qrCode, String bib, String pin);
+    List<Checkpoint> getCheckpoints(String eventId);
+
+    /**
+     * {@code GET /api/v1/events/{eventId}/participants?bib={bib}}
+     *
+     * @return the athletes with that bib number: none, one, or several (bib numbers are not unique)
+     */
+    List<Participant> findParticipantsByBib(String eventId, int bib);
+
+    /**
+     * {@code POST /api/v1/events/{eventId}/checkIn}
+     *
+     * <p>Records that the athlete passed the checkpoint at the given time. The API checks the course order.
+     *
+     * @throws CheckInRefusedException if the athlete has not started, missed an earlier checkpoint, or already
+     *                                 checked in here
+     */
+    void checkIn(String eventId, String checkpointId, String participantId, Instant timestamp);
 }

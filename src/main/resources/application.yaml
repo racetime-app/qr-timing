@@ -43,8 +43,12 @@ management:
 
 racetime:
   api:
-    # Base URL of the RaceTime API. The QR Timing endpoints live under /api/v1/qr.
+    # Base URL of the RaceTime API.
     base-url: https://api.racetime.app
+    # RaceTime API token, sent as the X-RaceTime-Token header. It must belong to an admin, because it acts on
+    # any event a QR code points to and reads the athletes' PINs. Never put the token in this file: set the
+    # RACETIME_API_TOKEN environment variable (on Cloud Run, from Secret Manager).
+    token: ${RACETIME_API_TOKEN:}
     # How long to wait for the API. Athletes are standing at a checkpoint, so fail fast and let them retry.
     connect-timeout: 3s
     read-timeout: 10s
