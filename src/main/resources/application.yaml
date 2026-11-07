@@ -32,6 +32,13 @@ server:
     include-stacktrace: never
     include-message: never
 
+logging:
+  level:
+    # Spring logs every request for an unknown address as a WARN, twice. On the internet that is mostly bots
+    # probing for other software, and browsers re-checking service workers left by other apps on the same host.
+    # Visitors still get the "Page not found" page, and Cloud Run's request log still records every 404.
+    org.springframework.web.servlet.PageNotFound: error
+
 management:
   endpoints:
     web:
