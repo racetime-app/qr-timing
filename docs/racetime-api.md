@@ -22,7 +22,7 @@ Every call sends a RaceTime API token in the `X-RaceTime-Token` header. QR Timin
 **RaceTime admin**, for two reasons:
 
 * It acts on whichever event a QR code points to, without being a timekeeper there.
-* The API returns athletes' PINs only to admins and to the event's managers.
+* The API returns every athlete's PIN only to admins and to the event's managers. Athletes see just their own.
 
 The token is configured as `racetime.api.token` (environment variable `RACETIME_API_TOKEN`). Keep it in a secret store.
 
