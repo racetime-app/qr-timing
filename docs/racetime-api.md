@@ -6,12 +6,16 @@ endpoints, and QR Timing has no special access.
 
 ## The QR code
 
-When an organiser leaves the timing of an event to an integration, the QR Timing operator puts a code at every
-checkpoint (and the finish). It holds a link to this app:
+When an organiser leaves the timing of an event to an integration, a code goes up at every checkpoint (and the
+finish). It holds a link to this app:
 
 ```
 https://<qr-timing-host>/c/{eventId}/{checkpointId}
 ```
+
+RaceTime runs this app at `qr.racetime.app`. The RaceTime app prints the codes for it: the QR button on an event's
+Route page downloads a PDF with one page per checkpoint and the finish. It makes no page for the start, since QR
+Timing does not record starts. If you run your own copy, generate the same links with your own host.
 
 `eventId` and `checkpointId` are the IDs RaceTime uses for the event and the checkpoint. Nothing in the link is
 secret. Athletes prove who they are with their bib number and, if the organiser gave them one, a PIN.

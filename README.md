@@ -28,7 +28,8 @@ the API calls.
 
 * QR Timing uses only the **public RaceTime API**, the same endpoints any integration can call. It authenticates
   with a RaceTime API token that belongs to an admin (in case of existing service that serve everybody) or race owner.
-* The QR code holds the event ID and the checkpoint ID, and nothing secret.
+* The QR code holds the event ID and the checkpoint ID, and nothing secret. RaceTime runs this app at
+  `https://qr.racetime.app`, and the RaceTime app prints the codes for it from an event's Route page.
 * Organisers hand an event's timing to an integration by setting its timing method to `INTEGRATION` (checkpoints
   and finish) or `INTEGRATION_CHECKPOINTS` (checkpoints only, timekeepers at the finish). QR Timing refuses
   check-ins for events left to timekeepers (`MANUAL`).
