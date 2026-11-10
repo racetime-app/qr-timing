@@ -120,14 +120,38 @@ environment variable:
 
 ## Deploy to Google Cloud Run
 
-The [`Dockerfile`](Dockerfile) builds the app and runs it on a JRE image. Store the API token in Secret Manager
-once:
+The [`Dockerfile`](Dockerfile) builds the app and runs it on a JRE image. Setting it up takes four steps, and only
+the last one is repeated for each new version.
+
+**1. Store the API token in Secret Manager.**
 
 ```bash
 printf '%s' "<token>" | gcloud secrets create qr-timing-api-token --project PROJECT_ID --data-file=-
 ```
 
-Then let Cloud Run build and deploy the app, handing it the token as `RACETIME_API_TOKEN`:
+**2. Create a service account for the app.** Cloud Run runs every service as some service account. Unless you name
+one, that is the project's default compute account, which many other services share and which usually holds the
+broad Editor role. An admin token is powerful, so give QR Timing an account of its own that can read this one secret
+and nothing else:
+
+```bash
+gcloud iam service-accounts create qr-timing --project PROJECT_ID --display-name "QR Timing"
+```
+
+The account needs no other roles. QR Timing calls only the RaceTime API, and it authenticates there with the
+token, not with Google credentials.
+
+**3. Let the account read the secret.** Grant the role on the secret itself, not on the whole project:
+
+```bash
+gcloud secrets add-iam-policy-binding qr-timing-api-token \
+  --project PROJECT_ID \
+  --member serviceAccount:qr-timing@PROJECT_ID.iam.gserviceaccount.com \
+  --role roles/secretmanager.secretAccessor
+```
+
+**4. Build and deploy.** Cloud Run builds the image from the source, runs it as the new account and hands it the
+token as `RACETIME_API_TOKEN`:
 
 ```bash
 gcloud run deploy qr-timing \
@@ -135,10 +159,18 @@ gcloud run deploy qr-timing \
   --project PROJECT_ID \
   --region us-central1 \
   --allow-unauthenticated \
+  --service-account qr-timing@PROJECT_ID.iam.gserviceaccount.com \
   --set-secrets RACETIME_API_TOKEN=qr-timing-api-token:latest
 ```
 
-The service account Cloud Run runs as needs the `Secret Manager Secret Accessor` role on the secret.
+If the deployment fails:
+
+* *"Permission denied on secret ... for Revision service account ..."*: the account the service runs as can't read
+  the secret. Check that `--service-account` names the account from step 2 and that step 3 was done. Without
+  `--service-account`, the error names the default compute account (`...-compute@developer.gserviceaccount.com`).
+  A new grant can take a minute to apply, so you may need to try again.
+* *"... does not have permission to act as service account ..."*: deploying a service that runs as another account
+  needs the `Service Account User` role (`roles/iam.serviceAccountUser`) on that account. Project owners have it.
 
 `/actuator/health` answers `{"status":"UP"}` and can serve as the startup and liveness probe.
 
